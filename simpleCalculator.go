@@ -114,28 +114,28 @@ func (i *Interpreter) Eat(tType TokenType) {
 func (i *Interpreter) Expr() int {
 	i.CurrentToken = i.getNextToken()
 
-	left := i.CurrentToken
-	i.Eat(INTEGER)
-	op := i.CurrentToken
-	if op.Type == PLUS {
-		i.Eat(PLUS)
-	} else {
-		i.Eat(MINUS)
+	result := i.term()
+
+	for i.CurrentToken.Type == PLUS ||
+	i.CurrentToken.Type == MINUS {
+		token := i.CurrentToken
+
+		if token.Type == PLUS {
+			i.Eat(PLUS)
+			result = result + i.term()
+		} else if token.Type == MINUS{
+			i.Eat(MINUS)
+			result = result - i.term()
+		}
 	}
 
-	right := i.CurrentToken
-	i.Eat(INTEGER)
-
-	lVal := left.Value.(int);
-	rVal := right.Value.(int);
-
-	var result int
-	if op.Type == PLUS {
-		result = lVal + rVal
-	} else {
-		result = lVal - rVal
-	}
 	return result
+}
+
+func (i *Interpreter) term() int {
+	t := i.CurrentToken
+	i.Eat(INTEGER)
+	return t.Value.(int)
 }
 
 func main() {
