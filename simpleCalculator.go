@@ -78,7 +78,7 @@ func (i *Lexer) integer() int {
 	return res
 }
 
-func (i *Lexer) getNextToken() *Token {
+func (i *Lexer) getNextToken() Token {
 
 	for i.CurrentChar != nil {
 		if unicode.IsSpace(*i.CurrentChar) {
@@ -86,122 +86,196 @@ func (i *Lexer) getNextToken() *Token {
 			continue
 		}
 		if unicode.IsDigit(*i.CurrentChar) {
-			return &Token{
+			return Token{
 				Type: INTEGER,
 				Value:i.integer(),
 			}
 		}
 		if *i.CurrentChar == '+' {
 			i.advance()
-			return &Token{Type:PLUS, Value:"+"}
+			return Token{Type:PLUS, Value:"+"}
 		}
 		if *i.CurrentChar == '-' {
 			i.advance()
-			return &Token{Type:MINUS, Value:"-"}
+			return Token{Type:MINUS, Value:"-"}
 		}
 		if *i.CurrentChar == '*' {
 			i.advance()
-			return &Token{Type:MUL, Value:"*"}
+			return Token{Type:MUL, Value:"*"}
 		}
 		if *i.CurrentChar == '/' {
 			i.advance()
-			return &Token{Type:DIV, Value:"/"}
+			return Token{Type:DIV, Value:"/"}
 		}
 		if *i.CurrentChar == '(' {
 			i.advance()
-			return &Token{Type:LPAREN, Value:"("}
+			return Token{Type:LPAREN, Value:"("}
 		}
 		if *i.CurrentChar == ')' {
 			i.advance()
-			return &Token{Type:RPAREN, Value:")"}
+			return Token{Type:RPAREN, Value:")"}
 		}
 		i.Error("getNextToken Not match")
 	}
-	return &Token{
+	return Token{
 		Type:EOF, Value: nil}
 }
 
-type Interpreter struct {
-	lexer        *Lexer
-	CurrentToken *Token
+type AST struct {
+
 }
 
-func NewInterpreter(l *Lexer) *Interpreter {
-	i := &Interpreter{
-		lexer: l,
+type BinOp struct {
+	Left  interface{}
+	Token Token
+	Op    Token
+	Right interface{}
+}
+
+func NewBinOp(left interface{}, op Token, right interface{}) *BinOp {
+	return &BinOp{
+		Left:left,
+		Token: op,
+		Op: op,
+		Right:right,
 	}
-	i.CurrentToken = i.lexer.getNextToken()
-	return i
 }
 
-func (i *Interpreter) Error(msg string) {
-	panic("INTERPRETER " + msg)
+type Num struct {
+	Token Token
+	Value int
 }
 
-func (i *Interpreter) Eat(tType TokenType) {
-	if i.CurrentToken.Type == tType {
-		i.CurrentToken = i.lexer.getNextToken()
+func NewNum(t Token) *Num {
+	return &Num{
+		Token: t,
+		Value:t.Value.(int),
+	}
+}
+
+type Parser struct {
+	Lexer        *Lexer
+	CurrentToken Token
+}
+
+func NewParser(l *Lexer) *Parser {
+	return &Parser{
+		Lexer:l,
+		CurrentToken:l.getNextToken(),
+	}
+}
+
+func (i *Parser) Error(msg string) {
+	panic("PARSER " + msg)
+}
+
+func (i *Parser) eat(tType TokenType) {
+	if (i.CurrentToken.Type == tType) {
+		i.CurrentToken = i.Lexer.getNextToken()
 	} else {
-		i.Error("Eat: Error parsing input")
+		i.Error("Eat wrong type")
 	}
 }
 
-func (i *Interpreter) factor() int {
+func (i *Parser) factor() interface{} {
 	t := i.CurrentToken
 	if t.Type == INTEGER {
-		i.Eat(INTEGER)
-		return t.Value.(int)
+		i.eat(INTEGER)
+		return NewNum(t)
 	} else if t.Type == LPAREN {
-		i.Eat(LPAREN)
-		r := i.Expr()
-		i.Eat(RPAREN)
-		return r
+		i.eat(LPAREN)
+		node := i.expr()
+		i.eat(RPAREN)
+		return node
 	}
-	i.Error("Interpreter factor unsupported TokenType")
-	return 0
+	i.Error("factor not supported type")
+	return nil
 }
 
-
-func (i *Interpreter) term() int {
-	result := i.factor()
+func (i *Parser) term() interface{} {
+	node := i.factor()
 
 	for i.CurrentToken.Type == MUL ||
 	i.CurrentToken.Type == DIV {
 		token := i.CurrentToken
 		if token.Type == MUL {
-			i.Eat(MUL)
-			result = result * i.factor()
+			i.eat(MUL)
 		} else if token.Type == DIV {
-			i.Eat(DIV)
-			result = result / i.factor()
+			i.eat(DIV)
 		}
+
+		node = &BinOp{Left:node, Op:token, Right: i.factor()}
 	}
-	return result
+	return node
 }
 
-func (i *Interpreter) Expr() int {
-	result := i.term()
+func (i *Parser) expr() interface{} {
+	node := i.term()
 
 	for i.CurrentToken.Type == PLUS ||
 	i.CurrentToken.Type == MINUS {
 		token := i.CurrentToken
 		if token.Type == PLUS {
-			i.Eat(PLUS)
-			result = result + i.term()
+			i.eat(PLUS)
 		} else if token.Type == MINUS {
-			i.Eat(MINUS)
-			result = result - i.term()
+			i.eat(MINUS)
 		}
+		node = &BinOp{Left:node, Op:token, Right:i.term()}
 	}
-	return result
+	return node
 }
 
-//
-//func (i *Interpreter) term() int {
-//	t := i.CurrentToken
-//	i.Eat(INTEGER)
-//	return t.Value.(int)
-//}
+func (i *Parser) parse() interface{} {
+	return i.expr()
+}
+
+type Interpreter struct {
+	Parser *Parser
+}
+
+func NewInterpreter(p *Parser) *Interpreter {
+	return &Interpreter{
+		Parser:p,
+	}
+}
+
+func (n *Interpreter) visitBinOp(node *BinOp) int {
+	if node.Op.Type == PLUS {
+		return n.visit(node.Left) + n.visit(node.Right)
+	} else if node.Op.Type == MINUS {
+		return n.visit(node.Left) - n.visit(node.Right)
+	} else if node.Op.Type == MUL {
+		return n.visit(node.Left) * n.visit(node.Right)
+	} else if node.Op.Type == DIV {
+		return n.visit(node.Left) / n.visit(node.Right)
+	}
+	n.Error("visitBinOp unknown operator type")
+	return 0;
+}
+
+
+func (i *Interpreter) Error(msg string) {
+	panic("INTERPRETER " + msg)
+}
+
+func (n *Interpreter) visitNum(node *Num) int {
+	return node.Value
+}
+
+func (n *Interpreter) visit(node interface{}) int {
+	switch t := node.(type){
+	case *BinOp:
+		return n.visitBinOp(t)
+	case *Num:
+		return n.visitNum(t)
+	}
+	return 0
+}
+
+func (n *Interpreter) interpret() int {
+	tree := n.Parser.parse()
+	return n.visit(tree)
+}
 
 func main() {
 
@@ -209,12 +283,24 @@ func main() {
 	fmt.Print("Enter text: ")
 	text, _ := reader.ReadString('\n')
 	text = strings.Trim(text, "\n")
-	//	text  := "2+3"
-	fmt.Println(text)
+	//			text  := "2+3"
+	//	fmt.Println(text)
 
 	lex := NewLexer(text)
-	inter := NewInterpreter(lex)
-	res := inter.Expr()
+	parser := NewParser(lex)
+	inter := NewInterpreter(parser)
+	res := inter.interpret()
 	fmt.Printf("Result: %v\n", res)
 
+//	mulTok := Token{Type:MUL, Value:"*"}
+//	plusTok := Token{Type:PLUS, Value:"+"}
+//	num2 := NewNum(Token{INTEGER, 2})
+//	num7 := NewNum(Token{INTEGER, 7})
+//	mulNode := NewBinOp(num2, mulTok, num7)
+//	num3 := NewNum(Token{INTEGER, 3})
+//	addNode := NewBinOp(mulNode, plusTok, num3)
+//
+//	intr := NewInterpreter(nil)
+//	res := intr.visit(addNode)
+//	fmt.Printf("Result: %v\n", res)
 }
