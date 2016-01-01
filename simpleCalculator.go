@@ -15,6 +15,8 @@ const (
 	MINUS TokenType = "MINUS"
 	MUL TokenType = "MUL"
 	DIV TokenType = "DIV"
+	LPAREN = "("
+	RPAREN = ")"
 	EOF TokenType = "EOF"
 )
 
@@ -105,6 +107,14 @@ func (i *Lexer) getNextToken() *Token {
 			i.advance()
 			return &Token{Type:DIV, Value:"/"}
 		}
+		if *i.CurrentChar == '(' {
+			i.advance()
+			return &Token{Type:LPAREN, Value:"("}
+		}
+		if *i.CurrentChar == ')' {
+			i.advance()
+			return &Token{Type:RPAREN, Value:")"}
+		}
 		i.Error("getNextToken Not match")
 	}
 	return &Token{
@@ -138,8 +148,17 @@ func (i *Interpreter) Eat(tType TokenType) {
 
 func (i *Interpreter) factor() int {
 	t := i.CurrentToken
-	i.Eat(INTEGER)
-	return t.Value.(int)
+	if t.Type == INTEGER {
+		i.Eat(INTEGER)
+		return t.Value.(int)
+	} else if t.Type == LPAREN {
+		i.Eat(LPAREN)
+		r := i.Expr()
+		i.Eat(RPAREN)
+		return r
+	}
+	i.Error("Interpreter factor unsupported TokenType")
+	return 0
 }
 
 
