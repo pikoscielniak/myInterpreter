@@ -141,6 +141,18 @@ func NewBinOp(left interface{}, op Token, right interface{}) *BinOp {
 	}
 }
 
+type UnaryOp struct {
+	Token Token
+	Expr  interface{}
+}
+
+func NewUnaryOp(t Token, expr interface{}) *UnaryOp {
+	return &UnaryOp{
+		Token:t,
+		Expr:expr,
+	}
+}
+
 type Num struct {
 	Token Token
 	Value int
@@ -179,7 +191,15 @@ func (i *Parser) eat(tType TokenType) {
 
 func (i *Parser) factor() interface{} {
 	t := i.CurrentToken
-	if t.Type == INTEGER {
+	if t.Type == PLUS {
+		fmt.Println("IAM IN FACTOR PLUS")
+		i.eat(PLUS)
+		return NewUnaryOp(t, i.factor())
+	} else if t.Type == MINUS {
+		fmt.Println("IAM IN FACTOR MINUS")
+		i.eat(MINUS)
+		return NewUnaryOp(t, i.factor())
+	} else if t.Type == INTEGER {
 		i.eat(INTEGER)
 		return NewNum(t)
 	} else if t.Type == LPAREN {
@@ -253,6 +273,16 @@ func (n *Interpreter) visitBinOp(node *BinOp) int {
 	return 0;
 }
 
+func (i *Interpreter) visitUnaryOp(node *UnaryOp) int {
+	op := node.Token.Type
+	if op == PLUS {
+		return +i.visit(node.Expr);
+	} else if op == MINUS {
+		return -i.visit(node.Expr)
+	}
+	i.Error("visitUnaryOp unkown operator")
+	return 0;
+}
 
 func (i *Interpreter) Error(msg string) {
 	panic("INTERPRETER " + msg)
@@ -263,12 +293,17 @@ func (n *Interpreter) visitNum(node *Num) int {
 }
 
 func (n *Interpreter) visit(node interface{}) int {
+	fmt.Println("%T", node)
 	switch t := node.(type){
 	case *BinOp:
 		return n.visitBinOp(t)
 	case *Num:
 		return n.visitNum(t)
+	case *UnaryOp:
+		fmt.Println("IAM HERE")
+		return n.visitUnaryOp(t)
 	}
+	n.Error("visit unknown type")
 	return 0
 }
 
@@ -292,15 +327,15 @@ func main() {
 	res := inter.interpret()
 	fmt.Printf("Result: %v\n", res)
 
-//	mulTok := Token{Type:MUL, Value:"*"}
-//	plusTok := Token{Type:PLUS, Value:"+"}
-//	num2 := NewNum(Token{INTEGER, 2})
-//	num7 := NewNum(Token{INTEGER, 7})
-//	mulNode := NewBinOp(num2, mulTok, num7)
-//	num3 := NewNum(Token{INTEGER, 3})
-//	addNode := NewBinOp(mulNode, plusTok, num3)
-//
-//	intr := NewInterpreter(nil)
-//	res := intr.visit(addNode)
-//	fmt.Printf("Result: %v\n", res)
+	//	mulTok := Token{Type:MUL, Value:"*"}
+	//	plusTok := Token{Type:PLUS, Value:"+"}
+	//	num2 := NewNum(Token{INTEGER, 2})
+	//	num7 := NewNum(Token{INTEGER, 7})
+	//	mulNode := NewBinOp(num2, mulTok, num7)
+	//	num3 := NewNum(Token{INTEGER, 3})
+	//	addNode := NewBinOp(mulNode, plusTok, num3)
+	//
+	//	intr := NewInterpreter(nil)
+	//	res := intr.visit(addNode)
+	//	fmt.Printf("Result: %v\n", res)
 }
